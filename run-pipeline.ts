@@ -134,6 +134,13 @@ function buildBatchInputForVariant(variant: typeof GENERATED_ASSETS[0], batchId:
   };
 }
 
+// Set ROC_SIGIL_OUTPUT_DIR to redirect disk writes (e.g. CI smoke runs) so the
+// committed output/ folder is not touched. Defaults to the repo's output/.
+const OUTPUT_DIR = process.env.ROC_SIGIL_OUTPUT_DIR;
+function outPath(p: string): string {
+  return OUTPUT_DIR ? p.replace(/^output\//, OUTPUT_DIR.replace(/\/+$/, '') + '/') : p;
+}
+
 async function main() {
   console.log('🚀 Roc Sigil Pipeline — Primordial Sigil starter collection');
   console.log('Style:', SIGIL_STYLE.name);
@@ -253,27 +260,30 @@ async function main() {
   let published = 0;
   for (const input of catalogInputs) {
     const persisted = persistCatalogRecord(input);
+    const metadataPath = outPath(input.metadataPath);
+    const licenseSummaryPath = outPath(input.licenseSummaryPath);
+    const downloadPackagePath = outPath(input.downloadPackagePath);
 
     // Write metadata JSON
     const fs = await import('fs/promises');
     const path = await import('path');
 
-    await fs.mkdir(path.dirname(input.metadataPath), { recursive: true });
-    await fs.writeFile(input.metadataPath, JSON.stringify(persisted.metadata, null, 2));
+    await fs.mkdir(path.dirname(metadataPath), { recursive: true });
+    await fs.writeFile(metadataPath, JSON.stringify(persisted.metadata, null, 2));
 
     // Write license summary
-    await fs.mkdir(path.dirname(input.licenseSummaryPath), { recursive: true });
-    await fs.writeFile(input.licenseSummaryPath, persisted.license.summary + '\n\n' + persisted.license.termsPath);
+    await fs.mkdir(path.dirname(licenseSummaryPath), { recursive: true });
+    await fs.writeFile(licenseSummaryPath, persisted.license.summary + '\n\n' + persisted.license.termsPath);
 
     // Ensure the download package placeholder exists (in real flow this would be a zip of the asset + license + metadata)
-    await fs.mkdir(path.dirname(input.downloadPackagePath), { recursive: true });
-    await fs.writeFile(input.downloadPackagePath.replace(/\.zip$/, '.txt'), 'Download package placeholder. Replace with actual zip containing final asset + license + metadata.');
+    await fs.mkdir(path.dirname(downloadPackagePath), { recursive: true });
+    await fs.writeFile(downloadPackagePath.replace(/\.zip$/, '.txt'), 'Download package placeholder. Replace with actual zip containing final asset + license + metadata.');
 
     console.log(`  Wrote metadata + license for ${persisted.metadata.internalId}`);
     published++;
   }
 
-  console.log(`\n✅ ${published} catalog entries finalized on disk under output/primordial-sigil/`);
+  console.log(`\n✅ ${published} catalog entries finalized on disk under ${outPath('output/')}primordial-sigil/`);
 
   console.log('\n=== Next steps for this collection ===');
   console.log('- Review the written metadata JSON and license summaries.');
